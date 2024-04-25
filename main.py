@@ -48,8 +48,7 @@ def main(args):
     for batch in attn_dataloader:
         coords, feature, img_path = batch
         img_path = img_path[0]
-        #feature = feature.to(args.device)
-        feature = torch.randn((1,200000,1024)).to(args.device)
+        feature = feature.to(args.device)
         with torch.no_grad():
             results_dict, attns = model(feature)
         result = torch.ones(attns[0].shape).to(attns[0].device)
