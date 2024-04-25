@@ -26,6 +26,26 @@ class TransLayer(nn.Module):
         _, attn = self.attn(self.norm(x))
         x = x + _
         return x, attn
+class TransLayer1(nn.Module):
+
+    def __init__(self, norm_layer=nn.LayerNorm, dim=512, head_fusion='mean'):
+        super().__init__()
+        self.norm = norm_layer(dim)
+        self.attn = NystromAttention(
+            dim = dim,
+            dim_head = dim//8,
+            heads = 8,
+            num_landmarks = dim//2,    # number of landmarks
+            pinv_iterations = 6,    # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
+            residual = True,         # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
+            dropout=0.1,
+            # return_attn= True,
+            # head_fusion='max',
+        )
+
+    def forward(self, x):
+        x = x + self.attn(self.norm(x))
+        return x
 
 
 class PPEG(nn.Module):
@@ -49,7 +69,7 @@ class TransMIL(nn.Module):
     def __init__(self, n_classes, head_fusion='mean'):
         super(TransMIL, self).__init__()
         self.pos_layer = PPEG(dim=512)
-        self._fc1 = nn.Sequential(nn.Linear(768, 512), nn.ReLU())
+        self._fc1 = nn.Sequential(nn.Linear(1024, 512), nn.ReLU())
         self.cls_token = nn.Parameter(torch.randn(1, 1, 512))
         self.n_classes = n_classes
         self.layer1 = TransLayer(dim=512, head_fusion=head_fusion)
@@ -64,6 +84,7 @@ class TransMIL(nn.Module):
         
         h = self._fc1(h) #[B, n, 512]
         
+        
         #---->pad
         H = h.shape[1]
         _H, _W = int(np.ceil(np.sqrt(H))), int(np.ceil(np.sqrt(H)))
@@ -72,7 +93,7 @@ class TransMIL(nn.Module):
 
         #---->cls_token
         B = h.shape[0]
-        cls_tokens = self.cls_token.expand(B, -1, -1).cuda()
+        cls_tokens = self.cls_token.expand(B, -1, -1).to(h.device)
         h = torch.cat((cls_tokens, h), dim=1)
 
         #---->Translayer x1
@@ -92,11 +113,10 @@ class TransMIL(nn.Module):
         Y_hat = torch.argmax(logits, dim=1)
         Y_prob = F.softmax(logits, dim = 1)
         results_dict = {'logits': logits, 'Y_prob': Y_prob, 'Y_hat': Y_hat}
-        return results_dict, [attn0, attn1]
-
+        return results_dict, [attn0[:,:H+1], attn1[:,:H+1]]
 if __name__ == "__main__":
-    data = torch.randn((1, 6000, 1024)).cuda()
+    data = torch.randn((1, 80000, 1024)).cuda()
     model = TransMIL(n_classes=2).cuda()
     print(model.eval())
-    results_dict = model(data = data)
+    results_dict = model(data)
     print(results_dict)

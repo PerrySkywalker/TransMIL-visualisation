@@ -147,16 +147,19 @@ class NystromAttention(nn.Module):
         out = rearrange(out, 'b h n d -> b n (h d)', h = h)
         out = self.to_out(out)
         out = out[:, -n:]
-
+        
         if self.return_attn:
+            attn1 = (attn1 @ attn2_inv)[:,:,1,:].unsqueeze(dim=2)
+            attn3 = attn3[:,:,:,-n:]
+            print(attn1.shape)
+            print(attn3.shape)
             if self.head_fusion == 'mean':
-                attn = (attn1[:,:, -n:,-n:] @ attn2_inv[:,:, -n:,-n:] @ attn3[:,:, -n:,-n:]).mean(axis=1)
-            if self.head_fusion == 'max':
-                attn = (attn1[:, :,-n:,-n:] @ attn2_inv[:, :,-n:,-n:] @ attn3[:, :,-n:,-n:]).max(axis=1)[0]
-            if self.head_fusion == 'min':
-                attn = (attn1[:, :,-n:,-n:] @ attn2_inv[:, :,-n:,-n:] @ attn3[:,:, -n:,-n:]).min(axis=1)[0]
-            return out, attn
-
+                attn = (attn1 @ attn3)[:,:,:,-n:].mean(dim=1)
+            elif self.head_fusion == 'max':
+                attn = (attn1  @ attn3)[:,:,:,-n:].max(dim=1)[0]
+            else :
+                attn = (attn1 @  attn3)[:,:,:,-n:].mean(dim=1)[0]
+            return out, attn.squeeze(dim=1).detach()
         return out
 
 # transformer
