@@ -13,10 +13,9 @@ parser.add_argument('--h5_path', type=str, default='h5-files/')
 parser.add_argument('--thumbnail_path', type=str, default='images/')
 #mean min max
 parser.add_argument('--head_fusion', type=str, default= 'mean')
-parser.add_argument('--model_path', type=str, default='model/test.ckpt')
+parser.add_argument('--model_path', type=str, default='')
 parser.add_argument('--model_name', type=str, default='TransMIL')
-parser.add_argument('--device', type=str, default='cuda:1')
-parser.add_argument('--discard_ratio', type=float, default=0.9)
+parser.add_argument('--device', type=str, default='cuda:0')
 #Determine the maximum size of the wsi using qupath, divide this size by the thumbnail size
 #int
 parser.add_argument('--downsample', type=int, default=64)
@@ -31,14 +30,6 @@ def load_model(model_name, mode_path):
         model = TransMIL(n_classes=2, head_fusion=args.head_fusion)
         model.load_state_dict(new_param)
     return model
-
-def get_attn(attns):
-    result = torch.eye(attns[0].size(-1)).to(attns[0].device)
-    for attn in attns:
-        I = torch.eye(attn.size(-1)).to(attn.device)
-        attn = (attn + 1.0*I)/2
-        result = torch.matmul(attn, result)
-    return result
 def main(args):
     model = load_model(args.model_name, args.model_path)
     attn_dataset = Attn_Dateset(args.h5_path, args.thumbnail_path)
@@ -62,9 +53,16 @@ def main(args):
             attn = attn / (attn.max())
             result = ((attn * result) + result) / 2
         attns = result[0, 1:].to('cpu')
-        attns = attns / (attns.mean())
-        #attns = 1 - attns
-        print(attns.mean())
+        if int(results_dict['Y_hat']) == 1:
+            epsilon = 1e-10
+            attns = attns + epsilon
+            attns = attns.exp()
+            min_val = attns.min()
+            max_val = attns.max()
+            attns = (attns - min_val) / (max_val - min_val)
+        else:
+            attns = attns.max()
+            attns = attns * 0.1
         downsample = args.downsample
         downsample_patchsize = int(args.patch_size//downsample)
         img = cv2.imread(img_path)
