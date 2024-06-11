@@ -61,7 +61,7 @@ def main(args):
             max_val = attns.max()
             attns = (attns - min_val) / (max_val - min_val)
         else:
-            attns = attns.max()
+            # attns = attns.max()
             attns = attns * 0.1
         downsample = args.downsample
         downsample_patchsize = int(args.patch_size//downsample)
