@@ -149,7 +149,8 @@ class NystromAttention(nn.Module):
         out = out[:, -n:]
         
         if self.return_attn:
-            attn1 = (attn1 @ attn2_inv)[:,:,1,:].unsqueeze(dim=2)
+            attn1 = (attn1 @ attn2_inv)[:,:,-n:-n+1,:]
+            attn1 = attn1[:,:,0:1,:]
             attn3 = attn3[:,:,:,-n:]
             print(attn1.shape)
             print(attn3.shape)

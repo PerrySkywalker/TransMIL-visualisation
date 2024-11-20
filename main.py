@@ -12,8 +12,8 @@ parser.add_argument('--h5_path', type=str, default='h5-files/')
 #thumbnail img dir
 parser.add_argument('--thumbnail_path', type=str, default='images/')
 #mean min max
-parser.add_argument('--head_fusion', type=str, default= 'mean')
-parser.add_argument('--model_path', type=str, default='')
+parser.add_argument('--head_fusion', type=str, default= 'min')
+parser.add_argument('--model_path', type=str, default='model/test.ckpt')
 parser.add_argument('--model_name', type=str, default='TransMIL')
 parser.add_argument('--device', type=str, default='cuda:0')
 #Determine the maximum size of the wsi using qupath, divide this size by the thumbnail size
@@ -29,6 +29,8 @@ def load_model(model_name, mode_path):
         new_param = {k[6:]: v for k, v in param.items()}
         model = TransMIL(n_classes=2, head_fusion=args.head_fusion)
         model.load_state_dict(new_param)
+        model.layer1.attn.head_fusion = args.head_fusion
+        model.layer2.attn.head_fusion = args.head_fusion
     return model
 def main(args):
     model = load_model(args.model_name, args.model_path)
@@ -50,7 +52,8 @@ def main(args):
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
-            attn = attn / (attn.max())
+            # attn = torch.softmax(attn, dim=1)
+            # attn = attn / attn.mean()
             result = ((attn * result) + result) / 2
         attns = result[0, 1:].to('cpu')
         if int(results_dict['Y_hat']) == 1:
@@ -60,6 +63,7 @@ def main(args):
             min_val = attns.min()
             max_val = attns.max()
             attns = (attns - min_val) / (max_val - min_val)
+            attns = attns / attns.mean()
         else:
             # attns = attns.max()
             attns = attns * 0.1
