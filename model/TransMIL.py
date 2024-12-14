@@ -89,7 +89,8 @@ class TransMIL(nn.Module):
         H = h.shape[1]
         _H, _W = int(np.ceil(np.sqrt(H))), int(np.ceil(np.sqrt(H)))
         add_length = _H * _W - H
-        h = torch.cat([h, h[:,:add_length,:]],dim = 1) #[B, N, 512]
+        cat_feture = torch.zeros(1, add_length, 512).to(h.device)
+        h = torch.cat([h, cat_feture],dim = 1) #[B, N, 512]
 
         #---->cls_token
         B = h.shape[0]
@@ -113,7 +114,7 @@ class TransMIL(nn.Module):
         Y_hat = torch.argmax(logits, dim=1)
         Y_prob = F.softmax(logits, dim = 1)
         results_dict = {'logits': logits, 'Y_prob': Y_prob, 'Y_hat': Y_hat}
-        return results_dict, [attn0[:,:H+1], attn1[:,:H+1]]
+        return results_dict, [attn0[:,:H+1], attn1[:,:H+1]], h
 if __name__ == "__main__":
     data = torch.randn((1, 80000, 1024)).cuda()
     model = TransMIL(n_classes=2).cuda()

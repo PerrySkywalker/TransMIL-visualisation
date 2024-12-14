@@ -2,6 +2,8 @@
 
 Supports up to **200,000 features** per Whole Slide Image (WSI) with **24GB of GPU memory**.
 
+**The feature extractor for the experiment is Ctranspath, the aggregator is TransMIL, and the dataset is sourced from camelyon16.**
+
 # First
 
 After using extract_features_fp.py in CLAM you will get .h5 files, put these in the h5-files folder. Put the WSI thumbnails in the images folder. Put the xxx.ckpt to model folder.
@@ -20,4 +22,10 @@ patch_size
 
 Your patch_size at 20x magnification is 224x224, so here it should be 448x448
 
+You can adjust the min_threshold and max_threshold to make the heatmap look better.
+
+
+
 If you have any questions, let me know.
+
+

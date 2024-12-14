@@ -6,13 +6,14 @@ from torch.utils.data import DataLoader
 from dataset import *
 import cv2
 import numpy as np
+import torch.nn as nn
 parser = argparse.ArgumentParser(description='Create heatmaps')
 #use clam create_feature_fp.py you can get .h5 file
 parser.add_argument('--h5_path', type=str, default='h5-files/')
 #thumbnail img dir
 parser.add_argument('--thumbnail_path', type=str, default='images/')
-#mean min max
-parser.add_argument('--head_fusion', type=str, default= 'min')
+#max attn
+parser.add_argument('--head_fusion', type=str, default= 'attn')
 parser.add_argument('--model_path', type=str, default='model/test.ckpt')
 parser.add_argument('--model_name', type=str, default='TransMIL')
 parser.add_argument('--device', type=str, default='cuda:0')
@@ -21,6 +22,13 @@ parser.add_argument('--device', type=str, default='cuda:0')
 parser.add_argument('--downsample', type=int, default=64)
 #patch-size
 parser.add_argument('--patch_size', type=int, default=512)
+# minimum threshold
+# If the attention value is lower than the minimum threshold, it will be set to 0.
+parser.add_argument('--min_threshold', type=float, default=0.8)
+
+# maximum threshold
+# if attn value higher than max_threshold, it will be set to 0
+parser.add_argument('--max_threshold', type=float, default=1)
 args = parser.parse_args()
 
 def load_model(model_name, mode_path):
@@ -38,12 +46,21 @@ def main(args):
     attn_dataloader = DataLoader(attn_dataset, batch_size=1, shuffle=False)
     model.to(device=args.device)
     model.eval()
+    # Obtain the parameters of the classifier
+    _fc2_p = model._fc2.weight.detach()
     for batch in attn_dataloader:
         coords, feature, img_path = batch
         img_path = img_path[0]
         feature = feature.to(args.device)
         with torch.no_grad():
-            results_dict, attns = model(feature)
+            results_dict, attns, h = model(feature)
+        header_attention = (h * _fc2_p).reshape((2, 8, 64)).sum(dim=-1)[1,:]
+        if args.head_fusion == 'max':
+            max_idx_header = torch.argmax(header_attention)
+            attns = [_[0, max_idx_header, :, :] for _ in attns]
+        elif args.head_fusion == 'attn':
+            header_attn = torch.softmax(header_attention, dim=0)
+            attns = [torch.einsum('bijk,i->bjk', _, header_attn).squeeze(1) for _ in attns]
         result = torch.ones(attns[0].shape).to(attns[0].device)
         for i, attn in enumerate(attns):
             torch.cuda.empty_cache()
@@ -52,20 +69,22 @@ def main(args):
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
-            # attn = torch.softmax(attn, dim=1)
-            # attn = attn / attn.mean()
+            attn = torch.softmax(attn, dim=1)
+            attn = attn / attn.mean()
             result = ((attn * result) + result) / 2
         attns = result[0, 1:].to('cpu')
         if int(results_dict['Y_hat']) == 1:
-            epsilon = 1e-10
-            attns = attns + epsilon
-            attns = attns.exp()
+            # attns = attns
+            # epsilon = 1e-10
+            # attns = attns + epsilon
+            # attns = attns.exp()
             min_val = attns.min()
             max_val = attns.max()
             attns = (attns - min_val) / (max_val - min_val)
-            attns = attns / attns.mean()
+            attns = attns / (attns.mean())
+            attns[attns > 1] = 1
+            attns[attns < 0.8] = 0
         else:
-            # attns = attns.max()
             attns = attns * 0.1
         downsample = args.downsample
         downsample_patchsize = int(args.patch_size//downsample)

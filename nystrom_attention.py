@@ -152,15 +152,8 @@ class NystromAttention(nn.Module):
             attn1 = (attn1 @ attn2_inv)[:,:,-n:-n+1,:]
             attn1 = attn1[:,:,0:1,:]
             attn3 = attn3[:,:,:,-n:]
-            print(attn1.shape)
-            print(attn3.shape)
-            if self.head_fusion == 'mean':
-                attn = (attn1 @ attn3)[:,:,:,-n:].mean(dim=1)
-            elif self.head_fusion == 'max':
-                attn = (attn1  @ attn3)[:,:,:,-n:].max(dim=1)[0]
-            else :
-                attn = (attn1 @  attn3)[:,:,:,-n:].mean(dim=1)[0]
-            return out, attn.squeeze(dim=1).detach()
+            attn = (attn1 @ attn3)[:,:,:,-n:]
+            return out, attn.squeeze(dim=1)
         return out
 
 # transformer
